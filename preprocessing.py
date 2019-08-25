@@ -173,10 +173,10 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
                 final = librosa.time_to_samples(row['final_time'], sr=sr)
 
                 # Add the mfcc with variable hop length and y data to the data frame
-                features.at[index, 'mfcc'] = librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0],
-                                                                  hop_length=int((initial-final)/(mfcc_size[1] - 1))).transpose()
+                df.at[index, 'mfcc'] = librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0],
+                                                            hop_length=int((final-initial)/(mfcc_size[1] - 1))).transpose()
 
-            df.to_csv(os.path.join(result_path, f'{base}.csv'))
+            df.to_csv(os.path.join(result_path, f'{base}.csv'), index=False)
             print(f'Done file number {base_index} - {base}')
         except Exception as e:
             print(e)
@@ -209,7 +209,7 @@ def extract_fresh_features(data, fc_parameters):
     Returns:
         The extracted features.
     """
-    return extract_features(data, column_id="id", column_sort="t", default_fc_parameters=fc_parameters)
+    return extract_features(data, column_id="id", column_sort="t", default_fc_parameters=fc_parameters, n_jobs=35)
 
 
 def obtain_feature_dictionaries(rttm_path, out_path, percentage=1, efficient=True):

@@ -4,3 +4,5 @@ import librosa
 import glob
 import os
 import numpy as np
+
+extract_labels()
