@@ -26,12 +26,12 @@ def create_data_frame(files):
         files: A list of files that should be parsed to obtain the data frame.
 
     Returns:
-        A data frame object of the form specified above.
+        Data frame objects of the form specified above. Each one corresponds to possible channels.
     """
     # Crawl through lines of all the files
     for path in files:
-        # Empty dictionary for the speakers that collects all their current tokens
-        speakers = {}
+        # Empty dictionary for the channels that collects all their current tokens
+        channels = {}
 
         # Crawl through lines of the given files
         with open(path) as file:
@@ -42,14 +42,14 @@ def create_data_frame(files):
 
                 # Ignore the comment sections
                 if not splitted[0].startswith(";"):
-                    # Mark the new speaker into the speakers dictionary (create separate channels)
+                    # Mark the new channel into the channels dictionary (create separate channels)
                     if splitted[0] == "SPKR-INFO":
-                        speakers[splitted[7]] = []
+                        channels[splitted[2]] = []
 
                     # Mark the lexeme as the end of sentence if there has been an SU after it
                     elif splitted[0] == "SU":
-                        if len(speakers[splitted[7]]) > 0:
-                            speakers[splitted[7]][-1]['end_of_sentence'] = True
+                        if len(channels[splitted[2]]) > 0:
+                            channels[splitted[2]][-1]['end_of_sentence'] = True
 
                     # Add all the interesting tokens
                     elif splitted[0] == "LEXEME":
@@ -61,32 +61,29 @@ def create_data_frame(files):
                         lexeme['subtype'] = splitted[6]
                         lexeme['end_of_sentence'] = False
 
-                        # Evaluate pause length by finding the minimum pause between current and all other tokens
-                        min_pause = float('inf')
-                        for tokens in speakers.values():
-                            if len(tokens) > 0:
-                                if lexeme['beginning_time'] - tokens[-1]['final_time'] < min_pause:
-                                    min_pause = lexeme['beginning_time'] - tokens[-1]['final_time']
+                        # Evaluate the pause length
+                        if len(channels[splitted[2]]) > 0:
+                            pause = lexeme['beginning_time'] - channels[splitted[2]][-1]['final_time']
 
-                                    # To eliminate situations in which the pause is negative (due to overlapping) we
-                                    # clip it to 0
-                                    if min_pause < 0:
-                                        min_pause = 0
-                                        break
+                            # To eliminate situations in which the pause is negative (due to overlapping) clip it to 0
+                            if pause < 0:
+                                pause = 0
+                        else:
+                            pause = 0
 
-                        # Add pause length and put the new lexeme into the corresponding speaker's channel
-                        lexeme['pause'] = min_pause
-                        speakers[splitted[7]].append(lexeme)
+                        # Add pause length and put the new lexeme into the corresponding channel
+                        lexeme['pause'] = pause
+                        channels[splitted[2]].append(lexeme)
 
-        # Add breaks as the last tokens for all speakers
-        for speaker in speakers.keys():
-            speakers[speaker][-1]['end_of_sentence'] = True
+        # Add breaks as the last tokens for all channels
+        for channel in channels.keys():
+            channels[channel][-1]['end_of_sentence'] = True
 
-        # Combine the arrays and create a data frame
+        # Create the data frames and return them
         combined = []
-        for tokens in speakers.values():
+        for tokens in channels.values():
             combined += tokens
-        return pd.DataFrame(combined)
+        return pd.DataFrame(combined).sort_values(by='beginning_time').reset_index(drop=True)
 
 
 def prepare_data_frame(audio_array, sampling_rate, data_frame):
