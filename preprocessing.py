@@ -125,8 +125,11 @@ def prepare_data_frame(audio_array, sampling_rate, data_frame):
 def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
     """Extracts the necessary labels (x, y) for the training of the network.
 
-    Saves the data frame with general token, start, end times, etc. and with all the extracted features (together with
-        mfcc and whether there are any NaN's column).
+    Saves:
+        - the data frame with general token, start, end times, etc. ('name'.csv)
+        - a numpy file with all the extracted features with pause included (features.npy).
+        - the mfcc features (mfcc.npy).
+        - the NaN indexes (nan.npy).
 
     Args:
         dictionary_path: A path to dictionaries that have some features and should be intersected.
@@ -154,28 +157,34 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
             data, y = prepare_data_frame(new_audio, sr, df)
             features = extract_fresh_features(data, fc_features)
 
-            # Obtain the base directory
+            # Obtain the base directory and the final location of files
             base = os.path.splitext(os.path.basename(file))[0]
 
-            # Merge the data frame and features data frames
-            df = pd.merge(df, features, left_index=True, right_index=True)
+            # Obtain the pause feature for the features
+            features['pause'] = df.loc[:, 'pause']
 
-            # Note the nan indexes and add them to the data frame
-            df['NaN'] = df.isna().any(1)
-
-            # Add the mfcc column to the data frame
-            df['mfcc'] = None
+            # Note the nan indexes and save them
+            nan = df.isna().any(1).nonzero()[0]
+            np.save(os.path.join(result_path, 'nan.npy'), nan)
 
             # Iterate through the rows of the data frame and check the features
+            mfcc = []
             for index, row in df.iterrows():
                 # Obtain the initial and final samples
                 initial = librosa.time_to_samples(row['beginning_time'], sr=sr)
                 final = librosa.time_to_samples(row['final_time'], sr=sr)
 
                 # Add the mfcc with variable hop length and y data to the data frame
-                df.at[index, 'mfcc'] = librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0],
-                                                            hop_length=int((final-initial)/(mfcc_size[1] - 1))).transpose()
+                mfcc.append(librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0],
+                                                 hop_length=int((final-initial)/(mfcc_size[1] - 1))).transpose())
 
+            # Drop all the NaN rows and save the array
+            np.save(os.path.join(result_path, 'features.npy'), features.dropna().values)
+
+            # Save the mfcc
+            np.save(os.path.join(result_path, 'mfcc.npy'), np.array(mfcc))
+
+            # Save the data frame and print file done
             df.to_csv(os.path.join(result_path, f'{base}.csv'), index=False)
             print(f'Done file number {base_index} - {base}')
         except Exception as e:
