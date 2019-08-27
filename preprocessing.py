@@ -68,16 +68,16 @@ def create_data_frame(files):
                             # To eliminate situations in which the pause is negative (due to overlapping) clip it to 0
                             if pause < 0:
                                 pause = 0
-                        else:
-                            pause = 0
 
-                        # Add pause length and put the new lexeme into the corresponding channel
-                        lexeme['pause'] = pause
+                            channels[splitted[2]][-1]['pause'] = pause
+
+                        # Put the new lexeme into the corresponding channel
                         channels[splitted[2]].append(lexeme)
 
-        # Add breaks as the last tokens for all channels
+        # Add breaks as the last tokens and pauses equal to 0 for all channels
         for channel in channels.keys():
             channels[channel][-1]['end_of_sentence'] = True
+            channels[splitted[2]][-1]['pause'] = 0
 
         # Create the data frames and return them
         combined = []
@@ -165,7 +165,7 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
             features['pause'] = df.loc[:, 'pause']
 
             # Note the nan indexes and save them
-            nan = df.isna().any(1).nonzero()[0]
+            nan = features.isna().any(1).nonzero()[0]
             np.save(os.path.join(result_path, f'{base}_nan.npy'), nan)
 
             # Iterate through the rows of the data frame and check the features
@@ -185,7 +185,7 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
             # Save the y labels
             np.save(os.path.join(result_path, f'{base}_y.npy'), y.values)
 
-            # Drop all the NaN rows and save the array
+            # Drop all the NaN rows and save the array n
             np.save(os.path.join(result_path, f'{base}_features.npy'), features.dropna().values)
 
             # Save the mfcc
@@ -238,11 +238,10 @@ def obtain_feature_dictionaries(rttm_path, out_path, percentage=1, efficient=Tru
         percentage: The percentage of files that will be sampled from the data. A float between 1 and 0.
         efficient: A boolean that specifies whether the features used should be efficient ones or not.
 
-    TODO think about doing join instead of intersection
     TODO implement efficient and non efficient versions
     """
     # Open file, audio and calculate relevant fresh features
-    files = glob.glob(rttm_path + "*.rttm")
+    files = glob.glob(os.path.join(rttm_path, "*.rttm"))
     files = np.random.choice(files, int(len(files) * percentage), replace=False)
 
     for file in files:
