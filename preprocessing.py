@@ -126,10 +126,11 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
     """Extracts the necessary labels (x, y) for the training of the network.
 
     Saves:
-        - the data frame with general token, start, end times, etc. ('name'.csv)
+        - the data frame with general token, start, end times, etc. ('name'.csv).
         - a numpy file with all the extracted features with pause included (features.npy).
         - the mfcc features (mfcc.npy).
         - the NaN indexes (nan.npy).
+        - the y labels (y.npy)
 
     Args:
         dictionary_path: A path to dictionaries that have some features and should be intersected.
@@ -180,6 +181,9 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
                     hop_length = 1
                 mfcc.append(librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0],
                                                  hop_length=hop_length).transpose())
+
+            # Save the y labels
+            np.save(os.path.join(result_path, f'{base}_y.npy'), y.values)
 
             # Drop all the NaN rows and save the array
             np.save(os.path.join(result_path, f'{base}_features.npy'), features.dropna().values)
