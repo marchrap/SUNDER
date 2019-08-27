@@ -1,7 +1,7 @@
 """The file that combines utility functions such as txt file generation, etc."""
 from tsfresh.feature_extraction import settings
 from tsfresh import extract_relevant_features
-from tsfresh.feature_extraction import extract_features
+from tsfresh.feature_extraction import extract_features, EfficientFCParameters
 import glob
 import nltk
 import pandas as pd
@@ -210,7 +210,15 @@ def calculate_relevant_fresh_features(data, y):
         frame.
     """
     # Obtain the features and filter them
-    features_filtered_direct = extract_relevant_features(data, y, column_id='id', column_sort='t')
+    setting = EfficientFCParameters()
+    del setting['number_cwt_peaks']
+    del setting['augmented_dickey_fuller']
+    del setting['change_quantiles']
+    del setting['fft_coefficient']
+    del setting['max_langevin_fixed_point']
+    del setting['cwt_coefficients']
+    features_filtered_direct = extract_relevant_features(data, y, column_id='id', column_sort='t',
+                                                         default_fc_parameters=setting)
     print(features_filtered_direct)
     return settings.from_columns(features_filtered_direct)
 
