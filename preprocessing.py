@@ -11,7 +11,7 @@ import os
 import librosa
 
 
-def create_data_frame(files):
+def create_data_frame(files, channels=False):
     """Creates a pandas DataFrame from the provided RTTM files.
 
     Data frame is of the form:
@@ -24,10 +24,17 @@ def create_data_frame(files):
 
     Args:
         files: A list of files that should be parsed to obtain the data frame.
+        channels: A boolean that determines whether channels or speakers are used for determining the sentence units.
 
     Returns:
         Data frame objects of the form specified above. Each one corresponds to possible channels.
     """
+    # Decide on which column to use
+    if channels:
+        option = 2
+    else:
+        option = 7
+
     # Crawl through lines of all the files
     for path in files:
         # Empty dictionary for the channels that collects all their current tokens
@@ -44,12 +51,12 @@ def create_data_frame(files):
                 if not splitted[0].startswith(";"):
                     # Mark the new channel into the channels dictionary (create separate channels)
                     if splitted[0] == "SPKR-INFO":
-                        channels[splitted[2]] = []
+                        channels[splitted[option]] = []
 
                     # Mark the lexeme as the end of sentence if there has been an SU after it
                     elif splitted[0] == "SU":
-                        if len(channels[splitted[2]]) > 0:
-                            channels[splitted[2]][-1]['end_of_sentence'] = True
+                        if len(channels[splitted[option]]) > 0:
+                            channels[splitted[option]][-1]['end_of_sentence'] = True
 
                     # Add all the interesting tokens
                     elif splitted[0] == "LEXEME":
@@ -60,26 +67,30 @@ def create_data_frame(files):
                         lexeme['token'] = splitted[5]
                         lexeme['subtype'] = splitted[6]
                         lexeme['end_of_sentence'] = False
+                        lexeme['pause'] = 0
 
-                        # Evaluate the pause length
-                        if len(channels[splitted[2]]) > 0:
-                            pause = lexeme['beginning_time'] - channels[splitted[2]][-1]['final_time']
+                        # Evaluate pause length by finding the minimum pause between current and all other tokens
+                        min_pause = float('inf')
+                        for tokens in channels.values():
+                            if len(tokens) > 0:
+                                if lexeme['beginning_time'] - tokens[-1]['final_time'] < min_pause:
+                                    min_pause = lexeme['beginning_time'] - tokens[-1]['final_time']
 
-                            # To eliminate situations in which the pause is negative (due to overlapping) clip it to 0
-                            if pause < 0:
-                                pause = 0
+                                    # To eliminate situations in which the pause is negative (due to overlapping) we
+                                    # clip it to 0
+                                    if min_pause < 0:
+                                        min_pause = 0
+                                        break
 
-                            channels[splitted[2]][-1]['pause'] = pause
+                        # Add pause length and put the new lexeme into the corresponding channel
+                        channels[splitted[option]][-1]['pause'] = min_pause
+                        channels[splitted[option]].append(lexeme)
 
-                        # Put the new lexeme into the corresponding channel
-                        channels[splitted[2]].append(lexeme)
-
-        # Add breaks as the last tokens and pauses equal to 0 for all channels
+        # Add breaks as the last tokens for all channels
         for channel in channels.keys():
             channels[channel][-1]['end_of_sentence'] = True
-            channels[splitted[2]][-1]['pause'] = 0
 
-        # Create the data frames and return them
+        # Create the data frames and return them sorted by time
         combined = []
         for tokens in channels.values():
             combined += tokens
@@ -209,7 +220,8 @@ def calculate_relevant_fresh_features(data, y):
         A pandas data frame object that contains the extracted features for each id of the previously provided data
         frame.
     """
-    # Obtain the features and filter them
+    # Obtain the features and filter them. Some of the default features are not very useful but computationally
+    # expensive, hence, omitted.
     setting = EfficientFCParameters()
     del setting['number_cwt_peaks']
     del setting['augmented_dickey_fuller']
@@ -261,7 +273,7 @@ def obtain_feature_dictionaries(rttm_path, out_path, percentage=1, efficient=Tru
             print(parameters)
 
             # Save the parameters
-            with open(os.path.splitext(out_path + os.path.basename(file))[0] + '_params.dict', 'wb') as out:
+            with open(os.path.join(out_path, os.path.splitext(os.path.basename(file))[0] + '_params.dict'), 'wb') as out:
                 pickle.dump(parameters, out, protocol=pickle.HIGHEST_PROTOCOL)
         except Exception as e:
             print(e)
