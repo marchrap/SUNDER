@@ -69,21 +69,25 @@ def create_data_frame(files, channels=False):
                         lexeme['end_of_sentence'] = False
                         lexeme['pause'] = 0
 
-                        # Evaluate pause length by finding the minimum pause between current and all other tokens
-                        min_pause = float('inf')
-                        for tokens in channels.values():
-                            if len(tokens) > 0:
-                                if lexeme['beginning_time'] - tokens[-1]['final_time'] < min_pause:
-                                    min_pause = lexeme['beginning_time'] - tokens[-1]['final_time']
+                        # Evaluate pause length by finding the minimum pause between current and all other tokens. Do it
+                        # only for the case where the length of the channel is big enough.
+                        if len(channels[splitted[option]]) > 0:
+                            min_pause = float('inf')
+                            for tokens in channels.values():
+                                if len(tokens) > 0:
+                                    if lexeme['beginning_time'] - tokens[-1]['final_time'] < min_pause:
+                                        min_pause = lexeme['beginning_time'] - tokens[-1]['final_time']
 
-                                    # To eliminate situations in which the pause is negative (due to overlapping) we
-                                    # clip it to 0
-                                    if min_pause < 0:
-                                        min_pause = 0
-                                        break
+                                        # To eliminate situations in which the pause is negative (due to overlapping) we
+                                        # clip it to 0
+                                        if min_pause < 0:
+                                            min_pause = 0
+                                            break
 
-                        # Add pause length and put the new lexeme into the corresponding channel
-                        channels[splitted[option]][-1]['pause'] = min_pause
+                            # Assign the pause length to the previous token
+                            channels[splitted[option]][-1]['pause'] = min_pause
+
+                        # Put the new lexeme into the corresponding channel
                         channels[splitted[option]].append(lexeme)
 
         # Add breaks as the last tokens for all channels
