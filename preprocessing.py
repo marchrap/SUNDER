@@ -68,15 +68,19 @@ def create_data_frame(files, channels=False):
                         lexeme['subtype'] = splitted[6]
                         lexeme['end_of_sentence'] = False
                         lexeme['pause'] = 0
+                        lexeme['turn'] = False
 
                         # Evaluate pause length by finding the minimum pause between current and all other tokens. Do it
-                        # only for the case where the length of the channel is big enough.
+                        # only for the case where the length of the channel is big enough. Also evaluate whether there
+                        # is a speaker turn.
                         if len(channels[splitted[option]]) > 0:
                             min_pause = float('inf')
-                            for tokens in channels.values():
+                            previous_speaker = ''
+                            for channel, tokens in channels.items():
                                 if len(tokens) > 0:
                                     if lexeme['beginning_time'] - tokens[-1]['final_time'] < min_pause:
                                         min_pause = lexeme['beginning_time'] - tokens[-1]['final_time']
+                                        previous_speaker = channel
 
                                         # To eliminate situations in which the pause is negative (due to overlapping) we
                                         # clip it to 0
@@ -84,8 +88,9 @@ def create_data_frame(files, channels=False):
                                             min_pause = 0
                                             break
 
-                            # Assign the pause length to the previous token
+                            # Assign the pause length and speaker turn to the previous token
                             channels[splitted[option]][-1]['pause'] = min_pause
+                            channels[splitted[option]][-1]['turn'] = previous_speaker != splitted[option]
 
                         # Put the new lexeme into the corresponding channel
                         channels[splitted[option]].append(lexeme)
@@ -116,8 +121,8 @@ def prepare_data_frame(audio_array, sampling_rate, data_frame):
     y = data_frame['end_of_sentence']
 
     # Obtain the start and end indexes
-    start_index = data_frame.loc[:, 'beginning_time'].idxmin()
-    final_index = data_frame.loc[:, 'final_time'].idxmax()
+    start_index = data_frame['beginning_time'].idxmin()
+    final_index = data_frame['final_time'].idxmax()
 
     # Cut the audio correspondingly
     start = librosa.time_to_samples(data_frame.loc[start_index, 'beginning_time'], sr=sampling_rate)
@@ -176,8 +181,9 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
             # Obtain the base directory and the final location of files
             base = os.path.splitext(os.path.basename(file))[0]
 
-            # Obtain the pause feature for the features
-            features['pause'] = df.loc[:, 'pause']
+            # Obtain the pause and turn features for the features
+            features['pause'] = df['pause']
+            features['turn'] = df['turn']
 
             # Note the nan indexes and save them
             nan = features.isna().any(1).nonzero()[0]
@@ -194,14 +200,14 @@ def extract_labels(dictionary_path, file_path, result_path, mfcc_size):
                 hop_length = int((final-initial)/(mfcc_size[1] - 1))
                 if hop_length == 0:
                     hop_length = 1
-                mfcc.append(librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0],
+                mfcc.append(librosa.feature.mfcc(y=new_audio[initial:final], n_mfcc=mfcc_size[0], sr=sr,
                                                  hop_length=hop_length).transpose())
 
             # Save the y labels
             np.save(os.path.join(result_path, f'{base}_y.npy'), y.values)
 
             # Drop all the NaN rows and save the array n
-            np.save(os.path.join(result_path, f'{base}_features.npy'), features.dropna().values)
+            np.save(os.path.join(result_path, f'{base}_features.npy'), features.values)
 
             # Save the mfcc
             np.save(os.path.join(result_path, f'{base}_mfcc.npy'), np.array(mfcc))
